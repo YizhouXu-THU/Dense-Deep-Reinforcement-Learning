@@ -17,11 +17,9 @@ class NADEBVGlobalController(NDDBVGlobalController):
         self.drl_epsilon_value = -1
         self.real_epsilon_value = -1
 
-
     # @profile
     def step(self):
-        """Control the selected bvs from the bvs candidates to realize the decided behavior
-        """
+        """Control the selected BVs from the BVs candidates to realize the decided behavior"""
         self.real_epsilon_value = -1
         self.drl_epsilon_value = -1
         self.control_log = {"criticality":0, "discriminator_input":0}
@@ -43,19 +41,21 @@ class NADEBVGlobalController(NDDBVGlobalController):
                     if self.apply_control_permission():
                         bv.update()
             elif conf.experiment_config["mode"] != "NDE":
-                bv_action_idx_list, weight_list, max_vehicle_criticality, ndd_possi_list, IS_possi_list, controlled_bvs_list, vehicle_criticality_list, _ = self.select_controlled_bv_and_action()
-                for bv_id in self.controllable_veh_id_list:
-                    bv = self.env.vehicle_list[bv_id]
-                    if bv in controlled_bvs_list:
-                        nade_action = bv_action_idx_list[controlled_bvs_list.index(bv)]
-                        if nade_action is not None:
-                            self.control_log["ndd_possi"] = ndd_possi_list[controlled_bvs_list.index(bv)]
-                            bv.controller.action = utils.action_id_to_action_command(
-                                nade_action)
-                            bv.controller.NADE_flag = True
-                            bv.simulator.set_vehicle_color(bv.id, bv.color_blue)
-                    if self.apply_control_permission():
-                        bv.update() # apply bv.controller.action
+                # renkun 0819
+                if not self.env.vehicle_list['CAV'].observation.information['Ego']['on_junction']:
+                    bv_action_idx_list, weight_list, max_vehicle_criticality, ndd_possi_list, IS_possi_list, controlled_bvs_list, vehicle_criticality_list, _ = self.select_controlled_bv_and_action()
+                    for bv_id in self.controllable_veh_id_list:
+                        bv = self.env.vehicle_list[bv_id]
+                        if bv in controlled_bvs_list:
+                            nade_action = bv_action_idx_list[controlled_bvs_list.index(bv)]
+                            if nade_action is not None:
+                                self.control_log["ndd_possi"] = ndd_possi_list[controlled_bvs_list.index(bv)]
+                                bv.controller.action = utils.action_id_to_action_command(nade_action)
+                                bv.controller.NADE_flag = True
+                                bv.is_pov = True
+                                bv.simulator.set_vehicle_color(bv.id, bv.color_blue)
+                        if self.apply_control_permission():
+                            bv.update() # apply bv.controller.action
             else:
                 raise ValueError("conf experiment mode not recognized. should be NDE or D2RL")
         self.control_log["weight_list_per_simulation"] = [
@@ -117,7 +117,8 @@ class NADEBVGlobalController(NDDBVGlobalController):
             if i in selected_bv_idx:
                 if whole_weight_list[i] and whole_weight_list[i]*self.env.info_extractor.episode_log["weight_episode"]*self.env.initial_weight < conf.weight_threshold:
                     bv_action_idx_list[i], weight_list[i], ndd_possi_list[i], IS_possi_list[i] = None, None, None, None
-            if i not in selected_bv_idx:
+            # if i not in selected_bv_idx:
+            else:
                 bv_action_idx_list[i], weight_list[i], ndd_possi_list[i], IS_possi_list[i] = None, None, None, None
         if len(bv_criticality_list):
             max_vehicle_criticality = np.max(bv_criticality_list)
@@ -134,7 +135,7 @@ class NADEBVGlobalController(NDDBVGlobalController):
         
     # @profile
     def get_bv_candidates(self):
-        """Find the Principal Other Vehicle (POV) candidates around the av
+        """Find the Principal Other Vehicle (POV) candidates around the AV.
 
         Returns:
             list(Vehicle): List of background vehicles around the CAV.
@@ -147,11 +148,14 @@ class NADEBVGlobalController(NDDBVGlobalController):
         bv_list = []
         # collect all bvs in a certain range of AV
         for bv_id in av_context_bv_list:
+            # renkun 0819
+            if self.env.vehicle_list[bv_id].observation.information['Ego']['on_junction']:
+                continue
             bv_pos = av_context[bv_id][66]
             dist = utils.cal_euclidean_dist(av_pos, bv_pos)
             if dist <= conf.cav_obs_range:
                 bv_list.append([bv_id, dist])
-        # sort the bvs list by distance, and select the top controlled_bv_num nearest bvs
+        # sort the BVs list by distance, and select the top controlled_bv_num nearest BVs
         bv_list.sort(key=lambda i: i[1])
         for i in range(len(bv_list)):
             if i < self.controlled_bv_num:
@@ -210,7 +214,11 @@ class NADEBVGlobalController(NDDBVGlobalController):
             CAV_position_lb, CAV_position_ub = [400, 40], [4400, 50]
         else: # 2lane 400m experiment
             CAV_position_lb, CAV_position_ub = [400, 40], [800, 50]
-        CAV_velocity_lb, CAV_velocity_ub = 0, 20
+
+        # renkun 0818
+        # CAV_velocity_lb, CAV_velocity_ub = 0, 20
+        CAV_velocity_lb, CAV_velocity_ub = conf.simulation_config["speed_range"]
+
         weight_lb = -30
         weight_ub = 0
         bv_criticality_flag_lb = 0
@@ -262,8 +270,7 @@ class NADEBVGlobalController(NDDBVGlobalController):
         left_LC_safety_flag, right_LC_safety_flag = False, False
         lane_index_list = [-1, 1]  # -1: right turn; 1: left turn
         for lane_index in lane_index_list:
-            LC_safety_flag, gain = NADEBVGlobalController._Mobil_surraget_model(
-                cav_obs=cav_obs, lane_index=lane_index)
+            LC_safety_flag, gain = NADEBVGlobalController._Mobil_surraget_model(cav_obs=cav_obs, lane_index=lane_index)
             if gain is not None:
                 if lane_index == -1:
                     right_gain = np.clip(gain, 0., None)
@@ -280,22 +287,18 @@ class NADEBVGlobalController(NDDBVGlobalController):
             right_LC_safety_flag = 0
             right_gain = 0
 
-        CAV_left_prob += conf.epsilon_lane_change_prob*left_LC_safety_flag
-        CAV_right_prob += conf.epsilon_lane_change_prob*right_LC_safety_flag
+        CAV_left_prob += conf.epsilon_lane_change_prob * left_LC_safety_flag
+        CAV_right_prob += conf.epsilon_lane_change_prob * right_LC_safety_flag
 
-        max_remaining_LC_prob = 1-conf.epsilon_still_prob-CAV_left_prob-CAV_right_prob
+        max_remaining_LC_prob = 1 - conf.epsilon_still_prob - CAV_left_prob - CAV_right_prob
 
         total_gain = left_gain+right_gain
-        obtained_LC_prob_for_sharing = np.clip(utils.remap(total_gain, [0, conf.SM_MOBIL_max_gain_threshold], [
-                                               0, max_remaining_LC_prob]), 0, max_remaining_LC_prob)
-        CAV_still_prob += (max_remaining_LC_prob -
-                           obtained_LC_prob_for_sharing)
+        obtained_LC_prob_for_sharing = np.clip(utils.remap(total_gain, [0, conf.SM_MOBIL_max_gain_threshold], [0, max_remaining_LC_prob]), 0, max_remaining_LC_prob)
+        CAV_still_prob += (max_remaining_LC_prob - obtained_LC_prob_for_sharing)
 
         if total_gain > 0:
-            CAV_left_prob += obtained_LC_prob_for_sharing * \
-                (left_gain/(left_gain + right_gain))
-            CAV_right_prob += obtained_LC_prob_for_sharing * \
-                (right_gain/(left_gain + right_gain))
+            CAV_left_prob += obtained_LC_prob_for_sharing * (left_gain/(left_gain + right_gain))
+            CAV_right_prob += obtained_LC_prob_for_sharing * (right_gain/(left_gain + right_gain))
 
         assert(0.99999 <= (CAV_left_prob + CAV_still_prob + CAV_right_prob) <= 1.0001)
         return CAV_left_prob, CAV_still_prob, CAV_right_prob
@@ -330,10 +333,8 @@ class NADEBVGlobalController(NDDBVGlobalController):
         if r_new_preceding <= 0 or r_new_following <= 0:
             return False, gain
 
-        new_following_a = utils.acceleration(
-            ego_vehicle=new_following, front_vehicle=new_preceding)
-        new_following_pred_a = utils.acceleration(
-            ego_vehicle=new_following, front_vehicle=cav_info)
+        new_following_a = utils.acceleration(ego_vehicle=new_following, front_vehicle=new_preceding)
+        new_following_pred_a = utils.acceleration(ego_vehicle=new_following, front_vehicle=cav_info)
 
         old_preceding = cav_obs["Lead"]
         old_following = cav_obs["Foll"]
@@ -350,9 +351,7 @@ class NADEBVGlobalController(NDDBVGlobalController):
             ego_vehicle=old_following, front_vehicle=cav_info)
         old_following_pred_a = utils.acceleration(
             ego_vehicle=old_following, front_vehicle=old_preceding)
-        gain = self_pred_a - self_a + conf.Surrogate_POLITENESS * \
-            (new_following_pred_a - new_following_a +
-             old_following_pred_a - old_following_a)
+        gain = self_pred_a - self_a + conf.Surrogate_POLITENESS * (new_following_pred_a - new_following_a + old_following_pred_a - old_following_a)
         return True, gain
 
     # @profile
@@ -371,7 +370,7 @@ class NADEBVGlobalController(NDDBVGlobalController):
 
     # @profile
     def _process_cav_context(self, vehicle_id_list):
-        """fetch information of all bvs from the cav context information
+        """fetch information of all BVs from the cav context information
         """
         cav = self.env.vehicle_list["CAV"]
         cav_pos = cav.observation.local["CAV"][66]
@@ -400,9 +399,7 @@ class NADEBVGlobalController(NDDBVGlobalController):
                     continue
                 else:
                     distance = -distance_alter
-                    relative_lane_index = - \
-                        self.env.simulator.get_vehicles_relative_lane_index(
-                            veh_id, "CAV")
+                    relative_lane_index = -self.env.simulator.get_vehicles_relative_lane_index(veh_id, "CAV")
             else:
                 relative_lane_index = self.env.simulator.get_vehicles_relative_lane_index(
                     "CAV", veh_id)

@@ -3,6 +3,7 @@ import numpy as np
 from bidict import bidict
 from mtlsp.observation.observation import Observation
 from mtlsp.simulator import Simulator
+import conf.conf as conf
 
 class Controller(ABC):
     """Controller class deal with the control of the vehicle based on observation
@@ -49,7 +50,12 @@ class Controller(ABC):
 
 class BaseController(Controller):
     longi_safety_buffer, lateral_safety_buffer = 2, 2
-    v_low, v_high, r_low, r_high, rr_low, rr_high, acc_low, acc_high =20, 40, 0, 115, -10, 8, -4, 2
+
+    # renkun 0818
+    # v_low, v_high, r_low, r_high, rr_low, rr_high, acc_low, acc_high = conf.v_low, conf.v_high, conf.r_low, conf.r_high, -10, 8, -4, 2
+    r_low, r_high, rr_low, rr_high, acc_low, acc_high = conf.r_low, conf.r_high, -10, 8, -4, 2
+    v_low, v_high = conf.simulation_config["speed_range"]
+
     acc_resolution = 0.2
     LENGTH = 5
     ACTION_STEP = 1.0

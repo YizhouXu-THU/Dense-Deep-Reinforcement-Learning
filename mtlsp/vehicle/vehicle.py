@@ -5,17 +5,24 @@ from mtlsp.observation.observation import Observation
 import conf.conf as conf
 
 class Vehicle(object):
-    color_red = (255,0,0)
-    color_yellow = (255,255,0)
-    color_blue = (0,0,255)
-    color_green = (0,255,0)
-    r_low, r_high, rr_low, rr_high, acc_low, acc_high = 0, 115, -10, 8, -4, 2
+    # xyz 1010
+    # color_red = (255,0,0)
+    # color_yellow = (255,255,0)
+    # color_blue = (0,0,255)
+    # color_green = (0,255,0)
+    # r_low, r_high, rr_low, rr_high, acc_low, acc_high = 0, 115, -10, 8, -4, 2
+    color_red, color_yellow, color_blue, color_green = conf.color_red, conf.color_yellow, conf.color_blue, conf.color_green
+    r_low, r_high, rr_low, rr_high, acc_low, acc_high = conf.r_low, conf.r_high, conf.rr_low, conf.rr_high, conf.acc_low, conf.acc_high
 
-    def __init__(self, id, controller, observation_method=Observation, routeID=None, simulator=None, initial_speed=None, initial_position=None, initial_lane_id=None):
-        if conf.simulation_config["speed_mode"] == "low_speed":
-            self.v_low, self.v_high = 0, 20
-        elif conf.simulation_config["speed_mode"] == "high_speed":
-            self.v_low, self.v_high = 20, 40
+    def __init__(self, id, controller, observation_method=Observation, routeID=None, vType="IDM", simulator=None, initial_speed=None, initial_position=None, initial_lane_id=None):
+
+        # renkun 0818
+        # if conf.simulation_config["speed_mode"] == "low_speed":
+        #     self.v_low, self.v_high = 0, 20
+        # elif conf.simulation_config["speed_mode"] == "high_speed":
+        #     self.v_low, self.v_high = conf.v_low, conf.v_high
+        self.v_low, self.v_high = conf.simulation_config["speed_range"]
+
         self.id = id
         self.controller = controller
         controller.vehicle = self
@@ -27,12 +34,14 @@ class Vehicle(object):
         self.lc_duration = self.simulator.lc_duration
         self.lc_step_num = int(self.simulator.lc_duration / self.action_step_size)
         self.routeID = routeID
+        self.vType = vType
         self.initial_speed = initial_speed
         self.initial_position = initial_position
         self.initial_lane_id = initial_lane_id
         self.controlled_flag = False
         self.controlled_duration = 0
         self.target_lane_index = None
+        self.is_pov = False
 
     def __iter__(self):
         yield self
@@ -78,7 +87,6 @@ class Vehicle(object):
         elif current_velocity + controlled_acc < self.v_low:
             controlled_acc = self.v_low - current_velocity
         
-        
         if action["lateral"] == "central":
             current_lane_offset = self.simulator.get_vehicle_lateral_lane_position(self.id)
             self.simulator.change_vehicle_sublane_dist(self.id, -current_lane_offset, self.step_size)
@@ -119,8 +127,8 @@ class Vehicle(object):
                 self.controlled_flag = False
                 self.controller.reset()
             else:
-                self.controlled_duration = (self.controlled_duration + 1)%self.lc_step_num
- 
+                self.controlled_duration = (self.controlled_duration + 1) % self.lc_step_num
+
     @property
     def observation(self):
         """Observation of the vehicle.
@@ -128,7 +136,8 @@ class Vehicle(object):
         Returns:
             Observation: Information of the vehicle itself and its surroundings. 
         """        
-        if not self._recent_observation or self._recent_observation.time_stamp != self.simulator.get_time(): #if the recent observation exists and the recent observation is not updated at the current timestamp, update the recent observation
+        if not self._recent_observation or self._recent_observation.time_stamp != self.simulator.get_time():
+        # if the recent observation exists and the recent observation is not updated at the current timestamp, update the recent observation
             self._recent_observation = self._get_observation()
         return self._recent_observation
 
@@ -142,7 +151,7 @@ class Vehicle(object):
         obs = self.observation_method(ego_id=self.id, time_stamp=self.simulator.get_time())
         obs.update(self.simulator.get_vehicle_context_subscription_results(self.id), self.simulator, self)
         return obs
-    
+
 
 class VehicleList(dict):
     def __init__(self, d):

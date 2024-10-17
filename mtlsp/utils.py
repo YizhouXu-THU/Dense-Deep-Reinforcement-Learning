@@ -3,6 +3,9 @@ import numpy as np
 import math
 import bisect
 
+# renkun 0818
+import conf.conf as conf
+
 
 def generate_unique_bv_id():
     """Randomly generate an ID of the background vehicle
@@ -31,7 +34,9 @@ def check_equal(x, y, error):
     else:
         return False
 
-def cal_dis_with_start_end_speed(v_start, v_end, acc, time_interval=1.0, v_low=20, v_high=40):
+# renkun 0818
+# def cal_dis_with_start_end_speed(v_start, v_end, acc, time_interval=1.0, v_low=20, v_high=40):
+def cal_dis_with_start_end_speed(v_start, v_end, acc, time_interval=1.0, v_low=conf.simulation_config["speed_range"][0], v_high=conf.simulation_config["speed_range"][1]):
     """Calculate the travel distance with start and end speed and acceleration.
 
     Args:

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+
+    <input>
+        <net-file value="map_debug.net.xml"/>
+        <route-files value="map_debug.rou.xml"/>
+    </input>
+
+</configuration>

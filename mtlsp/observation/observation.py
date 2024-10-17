@@ -1,6 +1,10 @@
 from abc import ABC
 from mtlsp.simulator import Simulator
 
+# renkun 0819
+import conf.conf as conf
+
+
 class Observation(ABC):
     """Observation class store the vehicle observations, the time_stamp object is essential to allow observation to only update once. 
     It is composed of the local information, context information, processed information and time stamp.
@@ -31,7 +35,7 @@ class Observation(ABC):
         self.time_stamp = time_stamp
 
     # @profile
-    def update(self, subscription=None, simulator=None, vehicle=None):
+    def update(self, subscription=None, simulator: Simulator=None, vehicle=None):
         """Update the observation of vehicle.
 
         Args:
@@ -50,7 +54,7 @@ class Observation(ABC):
                 self.context[bv_id] = subscription[bv_id]
         self.information = self.traci_based_process(subscription, simulator, vehicle)
 
-    def traci_based_process(self, subscription=None, simulator=None, vehicle=None):
+    def traci_based_process(self, subscription=None, simulator: Simulator=None, vehicle=None):
         if not subscription:
             raise ValueError("No subscription results are imported!")
         obs = {"Ego": Observation.pre_process_subscription(subscription, simulator, veh_id=self.ego_id, vehicle=vehicle)}
@@ -93,4 +97,26 @@ class Observation(ABC):
         veh["velocity"] = subscription[veh_id][64]
         veh["road_id"] = subscription[veh_id][80]
         veh["acceleration"] = subscription[veh_id][114]
+
+        # renkun 0819:
+        # veh["road_id"] = subscription[veh_id][80]
+        veh["lane_position"] = subscription[veh_id][86]
+
+        try:
+            offset = conf.sumo_net.getEdge(veh["road_id"]).getLane(veh["lane_index"]).getWidth() / 2
+            for i in range(veh["lane_index"]):
+                offset += conf.sumo_net.getEdge(veh["road_id"]).getLane(i).getWidth()
+            veh["lateral_offset"] = subscription[veh_id][184] + offset
+
+            width_base = 0
+            veh["lane_list_info"] = []
+            for lane in conf.sumo_net.getEdge(veh["road_id"]).getLanes():
+                lane_width = lane.getWidth()
+                veh["lane_list_info"].append(width_base + lane_width / 2)
+                width_base += lane_width
+
+            veh["on_junction"] = 0
+        except:
+            veh["on_junction"] = 1
+
         return veh

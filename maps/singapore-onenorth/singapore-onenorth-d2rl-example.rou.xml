@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<routes>
+    <!-- <vType id="NDD" carFollowModel="IDMNEW" stepping="1" laneChangeModel="LCNEW" tau="0.2" accel="2.0" decel="4.0" length="5.0" minGap="2.0" maxSpeed="40.0" lcAccelLat="20000.0" actionStepLength="1.0"/>  -->
+    <!-- <vType id="IDM" carFollowModel="IDM" stepping="1" laneChangeModel="SL2015" tau="1.0" accel="2.0" decel="4.0" length="5.0" minGap="2.0" maxSpeed="20.0" lcAccelLat="20000.0"/> -->
+    <vType id="IDM" carFollowModel="IDM" stepping="1" laneChangeModel="SL2015" tau="0.2" accel="2.0" decel="4.0" length="5.0" minGap="2.0" maxSpeed="40.0" lcAccelLat="20000.0"/>
+    <route edges="649538096 573713867" id="route_0"/>
+    <route edges="173896250#0 173166882#0 173166882#1 652027920" id="route_1"/>
+    <route edges="655149206 746976889#1 746976887 538766118#0 538766118#1 746966173 120719659#0 120719659#1 746963951" id="route_2"/>
+    <route edges="634702969 746967062 479608893 538766115 120719658#0 120719658#1 120719658#2 655148853" id="route_3"/>
+    <route edges="638912261 747369068 168242583 -22278659 -644922572 -747367551" id="route_4"/>
+    <route edges="-745327739 -740962221 -745349346 -639999881 -745356719 538766099 746714120 573704873#0" id="route_5"/>
+</routes>

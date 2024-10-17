@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import numpy as np
+from conf import conf
 from mtlsp.simulator import Simulator
 from mtlsp.controller.vehicle_controller.controller import Controller, BaseController
 
@@ -9,28 +10,46 @@ CAV_COMFORT_ACC_MAX = 1.5 #2.0  # [m/s2]
 CAV_COMFORT_ACC_MIN = -2 #-4.0  # [m/s2]
 CAV_DISTANCE_WANTED = 2.0 #5.0  # [m]
 CAV_TIME_WANTED = 1.2 #1.5  # [s]
-CAV_DESIRED_VELOCITY = 33.33 # 33.33 #35 # [m/s]
+
+# renkun 0818
+# CAV_DESIRED_VELOCITY = 35 # [m/s]
+# CAV_DESIRED_VELOCITY = 25 # [m/s]
+# xyz 0922
+CAV_DESIRED_VELOCITY = conf.v_high
+
 CAV_DELTA = 4.0  # []
 
 # Lateral policy parameters
 CAV_POLITENESS = 0.  # in [0, 1]
 CAV_LANE_CHANGE_MIN_ACC_GAIN = 0.1  # [m/s2]
 CAV_LANE_CHANGE_MAX_BRAKING_IMPOSED = 4.0  # [m/s2]
-Surrogate_LANE_CHANGE_MAX_BRAKING_IMPOSED = 4.0  # [m/s2]
+SURROGATE_LANE_CHANGE_MAX_BRAKING_IMPOSED = 4.0  # [m/s2]
 CAV_LANE_CHANGE_DELAY = 1.0  # [s]
 # NDD Vehicle IDM parameters
 COMFORT_ACC_MAX = 2 # [m/s2]
 COMFORT_ACC_MIN = -4.0  # [m/s2]
 DISTANCE_WANTED = 5.0  # [m]
 TIME_WANTED = 1.5  # [s]
-DESIRED_VELOCITY = 35 # [m/s]
+
+# renkun 0818
+# DESIRED_VELOCITY = 35 # [m/s]
+# DESIRED_VELOCITY = 25 # [m/s]
+# xyz 0922
+DESIRED_VELOCITY = conf.v_high
+
 DELTA = 4.0  # []
 # CAV surrogate model IDM parameter
 SM_IDM_COMFORT_ACC_MAX = 2.0  # [m/s2]  2
 SM_IDM_COMFORT_ACC_MIN = -4.0  # [m/s2]  -4
 SM_IDM_DISTANCE_WANTED = 5.0  # [m]  5
 SM_IDM_TIME_WANTED = 1.5  # [s]  1.5
-SM_IDM_DESIRED_VELOCITY = 35 # [m/s]
+
+# renkun 0818
+# SM_IDM_DESIRED_VELOCITY = 35 # [m/s]
+# SM_IDM_DESIRED_VELOCITY = 25 # [m/s]
+# xyz 0922
+SM_IDM_DESIRED_VELOCITY = conf.v_high
+
 SM_IDM_DELTA = 4.0  # []
 
 acc_low = -4
@@ -61,14 +80,11 @@ def acceleration(ego_vehicle=None, front_vehicle=None, mode=None):
         a0 = COMFORT_ACC_MAX
         v0 = SM_IDM_DESIRED_VELOCITY
         delt = SM_IDM_DELTA
-    acceleration = a0 * \
-        (1 - np.power(ego_vehicle["velocity"] /
-                      v0, delt))
+    acceleration = a0 * (1 - np.power(ego_vehicle["velocity"] / v0, delt))
     if front_vehicle is not None:
         r = front_vehicle["distance"]
         d = max(1e-5, r - LENGTH)
-        acceleration -= a0 * \
-            np.power(desired_gap(ego_vehicle, front_vehicle, mode) / d, 2)
+        acceleration -= a0 * np.power(desired_gap(ego_vehicle, front_vehicle, mode) / d, 2)
     return acceleration
 
 def desired_gap(ego_vehicle, front_vehicle=None, mode=None):

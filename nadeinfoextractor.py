@@ -124,8 +124,7 @@ class NADEInfoExtractor(InfoExtractor):
         """
         self.save_dir = self.env.simulator.experiment_path
         time_step = self.env.simulator.get_time()-self.env.simulator.step_size
-        snapshot_weight_list = self.env.global_controller_instance_list[
-            0].control_log["weight_list_per_simulation"]
+        snapshot_weight_list = self.env.global_controller_instance_list[0].control_log["weight_list_per_simulation"]
         self.episode_log["weight_episode"] = self.episode_log["weight_episode"] * \
             reduce(lambda x, y: x * y, snapshot_weight_list)
         try:
@@ -133,7 +132,7 @@ class NADEInfoExtractor(InfoExtractor):
         except:
             pass
         self.episode_log["current_weight"] = reduce(lambda x, y: x * y, snapshot_weight_list)
-        self.episode_log["av_obs"][time_step] = self.env.get_av_obs()
+        # self.episode_log["av_obs"][time_step] = self.env.get_av_obs() # xyz 0930
         try:
             self.episode_log["criticality_step_info"][time_step] = self.get_criticality_this_step()
             if not isclose(self.episode_log["current_weight"], 1):

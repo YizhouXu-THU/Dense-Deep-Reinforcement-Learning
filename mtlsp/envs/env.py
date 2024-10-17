@@ -1,6 +1,12 @@
+import os
+import pickle
+import numpy as np
+import conf.conf as conf
 from mtlsp.vehicle.vehicle import VehicleList, Vehicle
 from abc import abstractmethod
 from mtlsp.controller.vehicle_controller.controller import Controller
+from mtlsp.simulator import Simulator
+from mtlsp.network.trafficnet import TrafficNet
 
 
 class BaseEnv(object):
@@ -9,17 +15,23 @@ class BaseEnv(object):
         self.vehicle_list = VehicleList({})
         self.departed_vehicle_id_list = []
         self.arrived_vehicle_id_list = []
-        self.simulator = None
-        self.net = None
+        self.simulator: Simulator = None
+        self.net: TrafficNet = None
         self.global_controller_dict = global_controller_dict
         self.global_controller_instance_list = []
-        for veh_type in self.global_controller_dict:
+        for veh_type in self.global_controller_dict:    # "BV", "CAV"
             self.global_controller_instance_list.append(self.global_controller_dict[veh_type](self, veh_type))
         self.independent_controller_dict = independent_controller_dict
         self.info_extractor = info_extractor(self)
     
     def initialize(self):
         self.episode_info = {"id": self.simulator.episode, "start_time": self.simulator.get_time(), "end_time": None}
+        # xyz 0930
+        self.simulator._delete_all_vehicles_in_sumo()
+        self.traj_data = {}
+        self.vehicle_list = VehicleList({})
+        self.departed_vehicle_id_list = []
+        self.arrived_vehicle_id_list = []
 
     def __getattrib__(self, item):
         print(item)
@@ -100,7 +112,7 @@ class BaseEnv(object):
     def terminate_check(self):
         reason, stop, additional_info = self._terminate_check()
         if stop:
-            self.episode_info["end_time"] = self.simulator.get_time()-self.simulator.step_size
+            self.episode_info["end_time"] = self.simulator.get_time() - self.simulator.step_size
             self.info_extractor.get_terminate_info(stop, reason, additional_info)
         return stop, reason, additional_info
 
@@ -112,3 +124,35 @@ class BaseEnv(object):
             reason = "All Vehicles Left"
             stop = True
         return reason, stop, additional_info
+    
+    # xyz 0927
+    def append_traj_data(self):
+        for veh_id in self.traj_data.keys():
+            if veh_id not in self.vehicle_list:
+                self.traj_data[veh_id]["trajs"].append(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+                self.traj_data[veh_id]["trajs_mask"].append(0.0)
+                self.traj_data[veh_id]["is_pov"].append(0.0)
+            else:
+                info = self.vehicle_list[veh_id].observation.information["Ego"]
+                x, y, z = info["position3D"]
+                heading = info["heading"]   # sumo heading definition: 0-north, 90-east, 180-south, 270-west
+                vel = info["velocity"]
+                acc = info["acceleration"]
+                self.traj_data[veh_id]["trajs"].append(np.array([x, y, z, heading, vel, acc]))
+                self.traj_data[veh_id]["trajs_mask"].append(1.0)
+                self.traj_data[veh_id]["is_pov"].append(float(self.vehicle_list[veh_id].is_pov))
+        # TODO: 这里假设在每个episode内车辆只会减少不会中途增加，如果中途增加车辆需要添加相应代码
+    
+    def save_traj_data(self):
+        for veh_id in self.traj_data.keys():
+            self.traj_data[veh_id]["vType"] = self.vehicle_list[veh_id].vType
+            self.traj_data[veh_id]["trajs"] = np.array(self.traj_data[veh_id]["trajs"])
+            self.traj_data[veh_id]["trajs_mask"] = np.array(self.traj_data[veh_id]["trajs_mask"])
+            self.traj_data[veh_id]["is_pov"] = np.array(self.traj_data[veh_id]["is_pov"])
+            if np.all(self.traj_data[veh_id]["trajs_mask"] == 0):
+                del self.traj_data[veh_id]
+        # save_path = os.path.join(conf.experiment_config["traj_data_save_path"], conf.experiment_config["experiment_name"]+'-'+conf.experiment_config["map"])
+        save_path = os.path.join(self.simulator.experiment_path, "traj_data", conf.experiment_config["map"])
+        name = "episode" + str(self.episode_info["id"]) + ".pkl"
+        os.makedirs(save_path, exist_ok=True)
+        pickle.dump(self.traj_data, open(os.path.join(save_path, name), "wb"))

@@ -16,8 +16,13 @@ import sumolib
 import numpy as np
 import math
 from mtlsp.network.trafficnet import TrafficNet
+# from envs.nde import NDE
+# from envs.nade import NADE
 import time
-def dummy_function (sim):
+import xml.etree.ElementTree as ET
+from sumolib import checkBinary
+
+def dummy_function(sim):
     return
 
 
@@ -26,24 +31,27 @@ class Simulator(object):
         Simulator deals everything about synchronization of states between SUMO and python script
     '''
     def __init__(self,
-        sumo_config_file_path,
-        sumo_net_file_path,
-        sumo_control_state = True,
-        pre_step = dummy_function,
-        num_tries = 10,
-        step_size = 0.1,
-        lc_duration = 1,
-        action_step_size = 0.1,
-        sublane_flag=True,
-        gui_flag=False,
-        track_cav=False,
-        input=None,
-        input_path=None,
-        experiment_path=None,
-        output=None,
-        config={"max_obs_range": 115}):
+            sumo_net_file_path,
+            sumo_route_file_path,
+            sumo_config_file_path,
+            sumo_control_state = True,
+            pre_step = dummy_function,
+            num_tries = 10,
+            step_size = 0.1,
+            lc_duration = 1,
+            action_step_size = 0.1,
+            sublane_flag=True,
+            gui_flag=False,
+            track_cav=False,
+            input=None,
+            input_path=None,
+            experiment_path=None,
+            output=None,
+            config={"max_obs_range": 115},
+        ):
         self.env = None
         self.sumo_net_file_path = sumo_net_file_path
+        self.sumo_route_file_path = sumo_route_file_path
         self.sumo_config_file_path = sumo_config_file_path
         self.gui_flag = gui_flag
         self.track_cav = track_cav
@@ -74,6 +82,29 @@ class Simulator(object):
         self.split_run_flag = False
         self.episode = 0
         self.stop_reason = None
+        
+        # self.start()    # xyz 0930
+    
+    # xyz 0921
+    def parse_route_files(self):
+        vtypes, routes = {}, {}
+        if ',' in self.sumo_route_file_path:
+            route_files = self.sumo_route_file_path.split(',')
+            for route_file in route_files:
+                self.parse_single_route_file(route_file, vtypes, routes)
+        else:
+            self.parse_single_route_file(self.sumo_route_file_path, vtypes, routes)
+        return vtypes, routes
+
+    def parse_single_route_file(self, route_file, vtypes, routes):
+        element_tree = ET.parse(route_file)
+        root = element_tree.getroot()
+        for child in root:
+            if child.tag == 'vType':
+                vtypes[child.attrib['id']] = child.attrib
+            elif child.tag == 'route':
+                routes[child.attrib['id']] = child.attrib['edges']
+        return vtypes, routes
 
     def track_vehicle_gui(self, vehID="CAV"):
         """Track specific vehicle in GUI.
@@ -129,13 +160,22 @@ class Simulator(object):
         """Start SUMO simulation or initialize environment.
         """        
         if self.sumo_control_state:
-            sumoCmd = [self.sumo_binary, "-c", self.sumo_config_file_path, "--step-length", str(self.step_size), "--random", "--collision.mingap-factor", "0", "--collision.action", "warn"]
+            # xyz 0927
+            # sumoCmd = [checkBinary(self.sumo_binary), "-c", self.sumo_config_file_path, "--step-length", str(self.step_size), "--random", "--collision.mingap-factor", "0", "--collision.action", "warn"]
+            sumoCmd = [checkBinary(self.sumo_binary)]
+            sumoCmd += ["-c", self.sumo_config_file_path]
+            sumoCmd += ["-n", self.sumo_net_file_path]
+            sumoCmd += ["--step-length", str(self.step_size)]
+            sumoCmd += ["--random"]
+            sumoCmd += ["--collision.mingap-factor", "0"]
+            sumoCmd += ["--collision.action", "warn"]
+            
             if self.sublane_flag:
                 sumoCmd += ["--lateral-resolution", "0.25"]
             elif self.step_size < self.lc_duration:
                 sumoCmd += ["--lanechange.duration", str(self.lc_duration)]
             if self.output is not None:
-                print(self.output)
+                # print(self.output)
                 if self.split_run_flag:
                     self.output_filename = str(self.episode)
                 if "traj" in self.output:
@@ -163,19 +203,22 @@ class Simulator(object):
             if libsumo_flag:
                 traci.start(sumoCmd)
             else:
-                traci.start(sumoCmd, numRetries = self.num_tries)
-        else:
-            self.env.initialize()
+                traci.start(sumoCmd, numRetries=self.num_tries)
+        # xyz 0930
+        # else:
+        #     self.env.initialize()
         self.started = True
 
-    def traci_step(self, duration):
+    def traci_step(self, duration=0):
         """Simulation steps forwards.
 
         Args:
             duration (float): Step length in seconds.
-        """        
-        sim_step = traci.simulation.getTime()+duration
-        traci.simulationStep(step=sim_step)
+        """
+        # xyz 0927
+        # sim_step = traci.simulation.getTime() + duration
+        # traci.simulationStep(step=sim_step)
+        traci.simulationStep()
 
     def get_cav_travel_distance(self):
         """Get the travel distance of CAV.
@@ -190,12 +233,23 @@ class Simulator(object):
         """Make a simulation step.
         """        
         self.pre_step(self)
-        self.env.step()
+        self.env.step() # controller step
         if self.sumo_control_state:
-            sim_step = traci.simulation.getTime()+self.action_step_size
-            traci.simulationStep(step=sim_step)
+            # xyz 0927
+            # sim_step = traci.simulation.getTime() + self.action_step_size
+            # traci.simulationStep(step=sim_step)
+            traci.simulationStep()
         self.current_time_steps += 1
         self.env._check_vehicle_list()
+        self.env.append_traj_data()
+        if "CAV" in self.env.vehicle_list:
+            self.update_road_info()
+    
+    # xyz 0921
+    def update_road_info(self):
+        road_max_speed = int(self.get_lane_max_speed(self.get_vehicle_laneID("CAV")))
+        if road_max_speed != conf.v_high:
+            conf.update_road_info(road_max_speed)
 
     # @profile
     def soft_run(self):
@@ -204,12 +258,17 @@ class Simulator(object):
         self.env.initialize()
         traci.simulationStep()
         self.env._check_vehicle_list()
+        self.env.append_traj_data()
         while True:
             stop, reason, _ = self.env.terminate_check()
             if stop:
                 self.stop_reason = reason
                 break
             self.step()
+        # xyz 0927
+        if 1 in self.stop_reason:   # CAV and BV collision
+            self.env.save_traj_data()
+        print(f"Simulation ends at step {self.current_time_steps}, reason: {self.stop_reason}")
 
     def plain_traci_step(self):
         traci.simulationStep()
@@ -223,15 +282,18 @@ class Simulator(object):
         """        
         self.split_run_flag = True
         self.episode = episode
-        self.start()
+        self.current_time_steps = 0
+        self.start()  # xyz 0930
+        conf.sumo_net = sumolib.net.readNet(self.sumo_net_file_path)    # renkun 0818
         self.soft_run()
-        self.stop()
+        self.stop()   # xyz 0930
 
     def stop(self):
         """Close SUMO simulation.
         """        
         if self.started:
             traci.close()
+            # print("SUMO closed.")
             self.started = False
     
     def get_time(self):
@@ -266,11 +328,11 @@ class Simulator(object):
         Returns:
             list(sumo lane object): Possible lanes to insert vehicles
         """        
-        sumo_net = sumolib.net.readNet(self.sumo_net_file_path)
+        # sumo_net = sumolib.net.readNet(self.sumo_net_file_path)
         if edge_id == None:
-            sumo_edges = sumo_net.getEdges()
+            sumo_edges = conf.sumo_net.getEdges()
         else:
-            sumo_edges = [sumo_net.getEdge(edge_id)]
+            sumo_edges = [conf.sumo_net.getEdge(edge_id)]
         available_lanes = []
         for edge in sumo_edges:
             for lane in edge.getLanes():
@@ -300,7 +362,8 @@ class Simulator(object):
         Returns:
             float: Edge length.
         """        
-        lane_id = edgeID+"_0"
+        lane_id = edgeID + "_0"
+        # lane_id = self.get_available_lanes(edgeID)[0].getID() # xyz 1010: edgeID cannot start with ":"
         lane_length = self.get_lane_length(lane_id)
         return lane_length
     
@@ -348,6 +411,18 @@ class Simulator(object):
         """        
         return traci.lane.getDisallowed(laneID)
     
+    # xyz 0921
+    def get_lane_max_speed(self, laneID):
+        """Get maximum speed of the lane.
+
+        Args:
+            laneID (str): Lane ID.
+
+        Returns:
+            float: Maximum speed in m/s.
+        """        
+        return traci.lane.getMaxSpeed(laneID)
+    
     def get_route_edges(self, routeID):
         """Get edges of the route.
 
@@ -359,7 +434,7 @@ class Simulator(object):
         """        
         return traci.route.getEdges(routeID)
 
-    def _add_vehicle_to_sumo (self, v, typeID='DEFAULT_VEHTYPE', initial_position=None, initial_lane_id=None, depart=None, departLane='first', departPos='base', departSpeed='0', arrivalLane='current', arrivalPos='max', arrivalSpeed='current', fromTaz='', toTaz='', line='', personCapacity=0, personNumber=0):
+    def _add_vehicle_to_sumo(self, v, typeID='DEFAULT_VEHTYPE', initial_position=None, initial_lane_id=None, depart=None, departLane='first', departPos='base', departSpeed='0', arrivalLane='current', arrivalPos='max', arrivalSpeed='current', fromTaz='', toTaz='', line='', personCapacity=0, personNumber=0):
         """Generate a vehicle in SUMO network.
 
         Args:
@@ -386,6 +461,7 @@ class Simulator(object):
             traci.vehicle.add(v.id, v.routeID, typeID=typeID, depart=depart, departLane=departLane, departPos=departPos, departSpeed=v.initial_speed, arrivalLane=arrivalLane, arrivalPos=arrivalPos, arrivalSpeed=arrivalSpeed, fromTaz=fromTaz, toTaz=toTaz, line=line, personCapacity=personCapacity, personNumber=personNumber)
         if v.initial_lane_id is not None:
             traci.vehicle.moveTo(v.id, v.initial_lane_id, v.initial_position)
+        traci.vehicle.setMaxSpeed(v.id, conf.simulation_config["speed_range"][1])
         # if v.initial_speed != 0:
         #     traci.vehicle.setSpeed(v.id, v.initial_speed)
     
@@ -711,8 +787,7 @@ class Simulator(object):
 
         Returns:
             float: Vehicles distance.
-        """ 
-              
+        """
         first_edge_id = self.get_vehicle_roadID(first_veh_id)
         second_edge_id = self.get_vehicle_roadID(second_veh_id)
         first_lane_position = min(self.get_vehicle_lane_position(first_veh_id), self.get_edge_length(first_edge_id))
@@ -729,7 +804,7 @@ class Simulator(object):
         Returns:
             float: Longitudinal distance between two vehicles.
         """        
-        return traci.simulation.getDistance2D(first_veh_pos[0],first_veh_pos[1],second_veh_pos[0],second_veh_pos[1],False,True)
+        return traci.simulation.getDistance2D(first_veh_pos[0], first_veh_pos[1], second_veh_pos[0], second_veh_pos[1], False, True)
     
     def get_vehicles_relative_lane_index(self, ego_vehID, front_vehID):
         """Get relative lane index for two vehicles.
@@ -750,7 +825,7 @@ class Simulator(object):
         if front_roadID[0] == ":":
             links = self.get_lane_links(front_laneID)
             if len(links) > 1:
-                print("WARNING: Can't locate vehicles "+str(ego_vehID)+" and "+str(front_vehID))
+                # print("WARNING: Can't locate vehicles "+str(ego_vehID)+" and "+str(front_vehID))
                 return 3
             front_laneID = links[0][0]
             front_roadID = traci.lane.getEdgeID(front_laneID)
@@ -763,10 +838,16 @@ class Simulator(object):
             links = self.get_lane_links(laneID)
             # print(links)
             if len(links) > 1:
-                print("WARNING: Can't locate vehicles "+str(ego_vehID)+" and "+str(front_vehID))
+                # print("WARNING: Can't locate vehicles "+str(ego_vehID)+" and "+str(front_vehID))
                 return 3
             else:
-                laneID = links[0][0]
+                # renkun 0818
+                # laneID = links[0][0]
+                try:
+                    laneID = links[0][0]
+                except:
+                    return 3
+
                 roadID = traci.lane.getEdgeID(laneID)
             it += 1
         print("WARNING: Can't find relative lane index for vehicles "+str(ego_vehID)+" and "+str(front_vehID))
@@ -828,6 +909,27 @@ class Simulator(object):
                 ego_veh['lane_index'] = ego_info[82]
                 ego_veh['position3D'] = ego_info[57]
                 ego_veh["acceleration"] = ego_info[114]
+
+                # renkun 0819:
+                ego_veh["road_id"] = ego_info[80]
+                ego_veh["lane_position"] = ego_info[86]
+                try:
+                    offset = conf.sumo_net.getEdge(ego_veh["road_id"]).getLane(ego_veh["lane_index"]).getWidth() / 2
+                    for i in range(ego_veh["lane_index"]):
+                        offset += conf.sumo_net.getEdge(ego_veh["road_id"]).getLane(i).getWidth()
+                    ego_veh["lateral_offset"] = ego_info[184] + offset
+
+                    width_base = 0
+                    ego_veh["lane_list_info"] = []
+                    for lane in conf.sumo_net.getEdge(ego_veh["road_id"]).getLanes():
+                        lane_width = lane.getWidth()
+                        ego_veh["lane_list_info"].append(width_base + lane_width / 2)
+                        width_base += lane_width
+
+                    ego_veh["on_junction"] = 0
+                except:
+                    ego_veh["on_junction"] = 1
+
             except:
                 ego_veh['velocity'] = traci.vehicle.getSpeed(vehID)
                 ego_veh['position'] = traci.vehicle.getPosition(vehID)
@@ -835,6 +937,27 @@ class Simulator(object):
                 ego_veh['lane_index'] = traci.vehicle.getLaneIndex(vehID)
                 ego_veh['position3D'] = traci.vehicle.getPosition3D(vehID)
                 ego_veh["acceleration"] = traci.vehicle.getAcceleration(vehID)
+
+                # renkun 0819:
+                ego_veh["road_id"] = traci.vehicle.getRoadID(vehID)
+                ego_veh["lane_position"] = traci.vehicle.getLanePosition(vehID)
+                try:
+                    offset = conf.sumo_net.getEdge(ego_veh["road_id"]).getLane(ego_veh["lane_index"]).getWidth() / 2
+                    for i in range(ego_veh["lane_index"]):
+                        offset += conf.sumo_net.getEdge(ego_veh["road_id"]).getLane(i).getWidth()
+                    ego_veh["lateral_offset"] = traci.vehicle.getLateralLanePosition(vehID) + offset
+
+                    width_base = 0
+                    ego_veh["lane_list_info"] = []
+                    for lane in conf.sumo_net.getEdge(ego_veh["road_id"]).getLanes():
+                        lane_width = lane.getWidth()
+                        ego_veh["lane_list_info"].append(width_base + lane_width / 2)
+                        width_base += lane_width
+
+                    ego_veh["on_junction"] = 0
+                except:
+                    ego_veh["on_junction"] = 1
+
         return ego_veh
 
     def get_leading_vehicle(self, vehID):
@@ -860,7 +983,7 @@ class Simulator(object):
             return None
         else:
             r = leader_info[1] + traci.vehicle.getMinGap(vehID)
-            return self.get_ego_vehicle(leader_info[0],r)
+            return self.get_ego_vehicle(leader_info[0], r)
 
     def get_following_vehicle(self, vehID):
         """Get the information of the following vehicle.
@@ -885,7 +1008,7 @@ class Simulator(object):
             return None
         else:
             r = follower_info[1] + traci.vehicle.getMinGap(follower_info[0])
-            return self.get_ego_vehicle(follower_info[0],r)
+            return self.get_ego_vehicle(follower_info[0], r)
 
     def get_neighboring_leading_vehicle(self, vehID, dir):
         """Get the information of the neighboring leading vehicle.
@@ -920,7 +1043,7 @@ class Simulator(object):
                 leader_info_list[i][1] += traci.vehicle.getMinGap(vehID)
             sorted_leader = sorted(leader_info_list,key=lambda l:l[1])
             closest_leader = sorted_leader[0]
-            return self.get_ego_vehicle(closest_leader[0],closest_leader[1])
+            return self.get_ego_vehicle(closest_leader[0], closest_leader[1])
 
     def get_neighboring_following_vehicle(self, vehID, dir):
         """Get the information of the neighboring following vehicle.
@@ -955,7 +1078,7 @@ class Simulator(object):
                 follower_info_list[i][1] += traci.vehicle.getMinGap(follower_info_list[i][0])
             sorted_follower = sorted(follower_info_list,key=lambda l:l[1])
             closest_follower = sorted_follower[0]
-            return self.get_ego_vehicle(closest_follower[0],closest_follower[1])
+            return self.get_ego_vehicle(closest_follower[0], closest_follower[1])
     
     def get_vehicle_speed(self, vehID):
         """Get the vehicle speed within the last step.
@@ -1252,5 +1375,4 @@ class Simulator(object):
             tlsID (str): Signal ID.
             newlogic (Logic): New traffic light logic.
         """   
-        traci.trafficlight.setProgramLogic(tlsID, newlogic)   
-    
+        traci.trafficlight.setProgramLogic(tlsID, newlogic)

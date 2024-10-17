@@ -1,6 +1,10 @@
 from math import exp
 from .defaultconf import *
+import numpy as np
 import torch
+
+# update_road_info(road_max_speed=int(40))
+
 weight_threshold = 0
 epsilon_value = 0.99
 simulation_config["map"] = "2Lane" # simulation map definition
@@ -9,11 +13,11 @@ d2rl_agent_path = "./checkpoints/2lane_400m/model.pt" # the pytorch checkpoint o
 simulation_config["epsilon_type"] = "continious" # define whether the d2rl agent will output continious/discrete adversarial action probability
 experiment_config["AV_model"] = "IDM" # Tested AV models
 simulation_config["speed_mode"] = "high_speed" # the speed profile of the vehicles in the simulation
-simulation_config["gui_flag"] = False # whether to show the simulation in GUI
+simulation_config["gui_flag"] = True # whether to show the simulation in GUI
 
 discriminator_agent = None
 experiment_config["root_folder"] = "./data_analysis/raw_data" # the folder to save the simulation data
-experiment_config["episode_num"] = 1232
+experiment_config["episode_num"] = 10000
 
 # tree search-based maneuver challenge calculation configuration
 treesearch_config["search_depth"] = 1

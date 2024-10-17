@@ -3,8 +3,8 @@
 <configuration>
 
     <input>
-        <net-file value="2LaneHighway.net.xml"/>
-        <route-files value="2LaneHighwayHighSpeed.rou.xml"/>
+        <net-file value="singapore-onenorth.net.xml"/>
+        <route-files value="singapore-onenorth-d2rl-example.rou.xml"/>
     </input>
 
     <!-- <output>
@@ -12,7 +12,7 @@
     </output> -->
 
     <gui_only>
-        <gui-settings-file value="2LaneHighway.view.xml"/>
+        <gui-settings-file value="singapore-onenorth.view.xml"/>
         <start value="true"/>
         <quit-on-end value="true"/>
     </gui_only>

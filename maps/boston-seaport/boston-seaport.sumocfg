@@ -3,8 +3,8 @@
 <configuration>
 
     <input>
-        <net-file value="2LaneHighway.net.xml"/>
-        <route-files value="2LaneHighwayHighSpeed.rou.xml"/>
+        <net-file value="boston-seaport.net.xml"/>
+        <route-files value="boston-seaport-d2rl-example.rou.xml"/>
     </input>
 
     <!-- <output>
@@ -12,7 +12,7 @@
     </output> -->
 
     <gui_only>
-        <gui-settings-file value="2LaneHighway.view.xml"/>
+        <gui-settings-file value="boston-seaport.view.xml"/>
         <start value="true"/>
         <quit-on-end value="true"/>
     </gui_only>

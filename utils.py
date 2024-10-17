@@ -20,8 +20,6 @@ def get_conf():
     for path_tmp in [conf_path, crash_path, rejected_path, tested_but_safe_path]:
         os.makedirs(path_tmp, exist_ok=True)
     return episode_num, experiment_path
-    
-    
 
 
 def is_lane_change(obs_ego):
@@ -353,6 +351,26 @@ def pre_process_subscription(subscription, veh_id=None, distance=0.0):
     veh["heading"] = subscription[veh_id][67]
     veh["lane_index"] = subscription[veh_id][82]
     veh["distance"] = distance
+
+    # renkun 0819:
+    veh["road_id"] = subscription[veh_id][80]
+    veh["lane_position"] = subscription[veh_id][86]
+    try:
+        offset = conf.sumo_net.getEdge(veh["road_id"]).getLane(veh["lane_index"]).getWidth() / 2
+        for i in range(veh["lane_index"]):
+            offset += conf.sumo_net.getEdge(veh["road_id"]).getLane(i).getWidth()
+        veh["lateral_offset"] = subscription[veh_id][184] + offset
+
+        width_base = 0
+        veh["lane_list_info"] = []
+        for lane in conf.sumo_net.getEdge(veh["road_id"]).getLanes():
+            lane_width = lane.getWidth()
+            veh["lane_list_info"].append(width_base + lane_width / 2)
+            width_base += lane_width
+
+        veh["on_junction"] = 0
+    except:
+        veh["on_junction"] = 1
     return veh
 
 

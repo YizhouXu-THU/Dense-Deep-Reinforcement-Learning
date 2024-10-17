@@ -513,12 +513,14 @@ class NDDController(BaseController):
         elif round_item == "range_rate":
             value_list = conf.rr_list
 
-        if round_to_closest == 1:
-            mul, add, check = 1, 1, 0.5
-        elif round_to_closest == 0.5:
-            mul, add, check = 2, 0.5, 0.25
-        elif round_to_closest == 0.2:
-            mul, add, check = 5, 0.2, 0.1
+        # xyz 0922
+        # if round_to_closest == 1:
+        #     mul, add, check = 1, 1, 0.5
+        # elif round_to_closest == 0.5:
+        #     mul, add, check = 2, 0.5, 0.25
+        # elif round_to_closest == 0.2:
+        #     mul, add, check = 5, 0.2, 0.1
+        mul, add, check = 1/round_to_closest, round_to_closest, round_to_closest/2
 
         if val < value_list[0]:
             val = value_list[0]
